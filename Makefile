@@ -1,57 +1,55 @@
-SHELL := /bin/bash
-
 .PHONY: prereqs install test lint sast dep-scan secret-scan docker-build container-scan sbom sign-image verify-image policy security-all kind-create helm-deploy-staging helm-deploy-prod clean
 
 prereqs:
-	bash scripts/check-prereqs.sh
+	powershell -ExecutionPolicy Bypass -File scripts/check-prereqs.ps1
 
 install:
 	python -m pip install -r app/backend/requirements.txt
 	cd app/frontend && npm ci
 
 test:
-	bash scripts/test-all.sh
+	powershell -ExecutionPolicy Bypass -File scripts/test-all.ps1
 
 lint:
 	ruff check app/backend/src app/backend/tests
 
 sast:
-	bash scripts/run-sast.sh
+	powershell -ExecutionPolicy Bypass -File scripts/run-sast.ps1
 
 dep-scan:
-	bash scripts/run-dependency-scan.sh
+	powershell -ExecutionPolicy Bypass -File scripts/run-dependency-scan.ps1
 
 secret-scan:
-	bash scripts/run-secret-scan.sh
+	powershell -ExecutionPolicy Bypass -File scripts/run-secret-scan.ps1
 
 docker-build:
 	docker build -t $${IMAGE_NAME:-secure-supply-chain-backend}:$${IMAGE_TAG:-local} app/backend
 
 container-scan:
-	bash scripts/run-container-scan.sh
+	powershell -ExecutionPolicy Bypass -File scripts/run-container-scan.ps1
 
 sbom:
-	bash scripts/generate-sbom.sh
+	powershell -ExecutionPolicy Bypass -File scripts/generate-sbom.ps1
 
 sign-image:
-	bash scripts/sign-image.sh
+	powershell -ExecutionPolicy Bypass -File scripts/sign-image.ps1
 
 verify-image:
-	bash scripts/verify-image.sh
+	powershell -ExecutionPolicy Bypass -File scripts/verify-image.ps1
 
 policy:
-	bash scripts/run-policy-checks.sh
+	powershell -ExecutionPolicy Bypass -File scripts/run-policy-checks.ps1
 
 security-all: sast dep-scan secret-scan container-scan policy
 
 kind-create:
-	bash scripts/create-kind-cluster.sh
+	powershell -ExecutionPolicy Bypass -File scripts/create-kind-cluster.ps1
 
 helm-deploy-staging:
-	bash scripts/deploy-helm.sh staging secure-supply-chain-staging
+	powershell -ExecutionPolicy Bypass -File scripts/deploy-helm.ps1 -Environment staging -Namespace secure-supply-chain-staging
 
 helm-deploy-prod:
-	bash scripts/deploy-helm.sh prod prod
+	powershell -ExecutionPolicy Bypass -File scripts/deploy-helm.ps1 -Environment prod -Namespace prod
 
 clean:
-	bash scripts/clean.sh
+	powershell -ExecutionPolicy Bypass -File scripts/clean.ps1
