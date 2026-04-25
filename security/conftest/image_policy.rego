@@ -10,8 +10,7 @@ deny[msg] {
 deny[msg] {
   input.kind == "Secret"
   input.type == "Opaque"
-  key := object.keys(input.stringData)[_]
-  val := input.stringData[key]
+  val := input.stringData[_]
   contains(lower(val), "password")
   msg := "hardcoded password-like value detected in secret manifest"
 }

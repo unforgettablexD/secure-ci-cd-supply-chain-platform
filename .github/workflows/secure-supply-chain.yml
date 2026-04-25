@@ -6,7 +6,8 @@ on:
   pull_request:
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}/secure-supply-chain-backend
+  # Keep local image name lowercase to avoid invalid Docker tag errors on mixed-case GitHub usernames.
+  IMAGE_NAME: secure-supply-chain-backend
   IMAGE_TAG: ${{ github.sha }}
   # To publish to GHCR, enable packages:write on the workflow token or use a PAT.
 
@@ -91,12 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" app/backend
-      - uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
-          severity: "CRITICAL"
-          ignore-unfixed: true
-          exit-code: "1"
+      - run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0 image --severity CRITICAL --ignore-unfixed --skip-version-check --exit-code 1 "${IMAGE_NAME}:${IMAGE_TAG}"
 
   syft-sbom:
     runs-on: ubuntu-latest
