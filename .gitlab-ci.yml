@@ -110,9 +110,8 @@ syft_generate_sbom:
   script:
     - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:latest "$CI_REGISTRY_IMAGE:$IMAGE_TAG" -o spdx-json > sbom.spdx.json
-  artifacts:
-    paths:
-      - sbom.spdx.json
+    - test -s sbom.spdx.json
+    - echo "SBOM generated at sbom.spdx.json"
 
 cosign_sign_image:
   stage: sign
