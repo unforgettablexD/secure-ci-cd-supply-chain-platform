@@ -94,16 +94,12 @@ gitleaks_secret_scan:
 docker_build:
   stage: build
   image: docker:27
-  services:
-    - docker:27-dind
   script:
     - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
 
 trivy_container_scan:
   stage: security
   image: docker:27
-  services:
-    - docker:27-dind
   script:
     - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0 image --severity CRITICAL --ignore-unfixed --skip-version-check --exit-code 1 "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
@@ -111,8 +107,6 @@ trivy_container_scan:
 syft_generate_sbom:
   stage: sbom
   image: docker:27
-  services:
-    - docker:27-dind
   script:
     - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
     - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:latest "$CI_REGISTRY_IMAGE:$IMAGE_TAG" -o spdx-json > sbom.spdx.json
