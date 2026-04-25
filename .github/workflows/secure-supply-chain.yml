@@ -1,0 +1,135 @@
+name: Secure Supply Chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/secure-supply-chain-backend
+  IMAGE_TAG: ${{ github.sha }}
+  # To publish to GHCR, enable packages:write on the workflow token or use a PAT.
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r app/backend/requirements.txt
+      - run: ruff check app/backend/src app/backend/tests
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r app/backend/requirements.txt
+      - run: PYTHONPATH=app/backend pytest -q app/backend/tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cd app/frontend && npm ci && npm test
+
+  bandit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit
+      - run: bandit -c security/bandit.yaml -r app/backend/src -lll -iii
+
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: semgrep/semgrep-action@v1
+        with:
+          config: security/semgrep/rules.yaml
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pip-audit
+      - run: pip-audit -r app/backend/requirements.txt
+
+  npm-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cd app/frontend && npm ci && npm audit --audit-level=high
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: security/gitleaks.toml
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" app/backend
+
+  trivy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" app/backend
+      - uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          severity: "CRITICAL"
+          ignore-unfixed: true
+          exit-code: "1"
+
+  syft-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" app/backend
+      - uses: anchore/sbom-action@v0
+        with:
+          image: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          output-file: "sbom.spdx.json"
+
+  cosign-signing-placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Set COSIGN_ENABLE=true and configure keyless OIDC or cosign keys to enforce signing."
+
+  conftest-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: |
+          helm template secure-app helm/secure-app -f helm/secure-app/values.yaml -f helm/secure-app/values-staging.yaml > rendered.yaml
+      - uses: instrumenta/conftest-action@master
+        with:
+          files: rendered.yaml
+          policy: security/conftest
+
+  custom-api-exposure-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python security/api_exposure_check.py

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: secure-app-config
+  namespace: {{ default .Release.Namespace .Values.namespaceOverride }}
+data:
+  LOG_LEVEL: {{ .Values.env.LOG_LEVEL | quote }}

@@ -1,0 +1,26 @@
+rules:
+  - id: python-no-eval
+    patterns:
+      - pattern: eval(...)
+    message: "Avoid eval; use explicit parsing and validation."
+    severity: ERROR
+    languages: [python]
+
+  - id: fastapi-admin-route-auth-required
+    patterns:
+      - pattern: |
+          @app.get("/api/admin/$ROUTE")
+          def $FUNC(...):
+              ...
+    message: "Admin routes should explicitly require auth dependency."
+    severity: WARNING
+    languages: [python]
+    metadata:
+      guidance: "Use Depends(require_admin)."
+
+  - id: hardcoded-demo-secret-pattern
+    patterns:
+      - pattern-regex: '(?i)(api[_-]?key|secret|token)\s*=\s*"[^"]+"'
+    message: "Potential hardcoded secret assignment."
+    severity: WARNING
+    languages: [python]

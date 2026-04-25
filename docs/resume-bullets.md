@@ -1,0 +1,5 @@
+- Built secure CI/CD supply-chain pipeline using GitLab CI/CD and GitHub Actions with SAST, dependency scanning, secret detection, container scanning, SBOM generation, image signing, and policy-based deployment gates.
+- Implemented security gates blocking deployment on leaked secrets, high/critical vulnerabilities, failed policy checks, failed tests, and unsafe API exposure.
+- Deployed secured FastAPI backend to local Kubernetes using Helm with non-root containers, probes, resource limits, ConfigMaps, Secrets, and dev/staging/prod values.
+- Generated SBOMs with Syft, scanned container images with Trivy, signed/verified images with Cosign, and enforced Kubernetes security policies with OPA/Conftest.
+- Built threat model, remediation guide, incident runbooks, and GitLab/GitHub CI documentation for secure software delivery workflows.

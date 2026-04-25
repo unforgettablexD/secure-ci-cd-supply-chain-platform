@@ -1,0 +1,5 @@
+replicaCount: 2
+ingress:
+  enabled: false
+env:
+  LOG_LEVEL: INFO

@@ -1,0 +1,38 @@
+replicaCount: 2
+
+image:
+  repository: secure-supply-chain-backend
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: false
+  className: nginx
+  host: secure-app.local
+  path: /
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "300m"
+    memory: "256Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 75
+
+env:
+  LOG_LEVEL: INFO
+
+secretEnv:
+  DEMO_WEBHOOK_SIGNATURE: demo-valid-signature
+
+namespaceOverride: ""

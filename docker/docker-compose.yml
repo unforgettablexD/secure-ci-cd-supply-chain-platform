@@ -1,0 +1,10 @@
+services:
+  backend:
+    build:
+      context: ../app/backend
+    image: secure-supply-chain-backend:local
+    ports:
+      - "8001:8000"
+    environment:
+      DEMO_WEBHOOK_SIGNATURE: demo-valid-signature
+      LOG_LEVEL: INFO

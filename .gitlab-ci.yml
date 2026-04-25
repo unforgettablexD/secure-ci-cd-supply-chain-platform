@@ -1,0 +1,191 @@
+stages:
+  - validate
+  - lint
+  - test
+  - security
+  - build
+  - sbom
+  - sign
+  - policy
+  - deploy_staging
+  - deploy_prod
+
+variables:
+  # For local GitLab CE, set CI_REGISTRY/CI_REGISTRY_USER/CI_REGISTRY_PASSWORD in project variables
+  # if you want docker_push/signing against your local registry.
+  IMAGE_NAME: "secure-supply-chain-backend"
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  CI_REGISTRY_IMAGE: "registry.local/devsecops/secure-supply-chain-backend"
+  KUBE_CONTEXT: "kind-secure-supply-chain-lab"
+  HELM_RELEASE_NAME: "secure-app"
+  STAGING_NAMESPACE: "secure-supply-chain-staging"
+  PROD_NAMESPACE: "prod"
+  COSIGN_EXPERIMENTAL: "true"
+  DOCKER_TLS_CERTDIR: ""
+
+validate_structure:
+  stage: validate
+  image: alpine:3.20
+  script:
+    - test -f README.md
+    - test -f .gitlab-ci.yml
+    - test -f .github/workflows/secure-supply-chain.yml
+    - test -d app/backend/src
+    - test -d security/conftest
+
+ruff_lint:
+  stage: lint
+  image: python:3.11
+  script:
+    - pip install -r app/backend/requirements.txt
+    - ruff check app/backend/src app/backend/tests
+
+backend_pytest:
+  stage: test
+  image: python:3.11
+  script:
+    - pip install -r app/backend/requirements.txt
+    - PYTHONPATH=app/backend pytest -q app/backend/tests
+
+frontend_npm_test:
+  stage: test
+  image: node:22-alpine
+  script:
+    - cd app/frontend
+    - npm ci
+    - npm test
+
+bandit_sast:
+  stage: security
+  image: python:3.11
+  script:
+    - pip install bandit
+    - bandit -c security/bandit.yaml -r app/backend/src -lll -iii
+
+semgrep_sast:
+  stage: security
+  image: semgrep/semgrep:1.86.0
+  script:
+    - semgrep --config security/semgrep/rules.yaml app/backend/src --error
+
+python_dependency_audit:
+  stage: security
+  image: python:3.11
+  script:
+    - pip install pip-audit
+    - pip-audit -r app/backend/requirements.txt
+
+node_dependency_audit:
+  stage: security
+  image: node:22-alpine
+  script:
+    - cd app/frontend
+    - npm ci
+    - npm audit --audit-level=high
+
+gitleaks_secret_scan:
+  stage: security
+  image:
+    name: zricethezav/gitleaks:v8.24.2
+    entrypoint: [""]
+  script:
+    - gitleaks detect --source . --config security/gitleaks.toml --redact
+
+docker_build:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
+
+trivy_container_scan:
+  stage: security
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.63.0 image --severity CRITICAL --ignore-unfixed --skip-version-check --exit-code 1 "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+
+syft_generate_sbom:
+  stage: sbom
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" app/backend
+    - docker run --rm -v /var/run/docker.sock:/var/run/docker.sock anchore/syft:1.18.1 "$CI_REGISTRY_IMAGE:$IMAGE_TAG" -o spdx-json > sbom.spdx.json
+  artifacts:
+    paths:
+      - sbom.spdx.json
+
+cosign_sign_image:
+  stage: sign
+  image: cgr.dev/chainguard/cosign:latest
+  script:
+    - |
+      if [ "${COSIGN_ENABLE:-false}" != "true" ]; then
+        echo "Skipping cosign sign. Set COSIGN_ENABLE=true to enforce signing."
+        exit 0
+      fi
+    - cosign sign --yes "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+
+cosign_verify_image:
+  stage: sign
+  image: cgr.dev/chainguard/cosign:latest
+  script:
+    - |
+      if [ "${COSIGN_ENABLE:-false}" != "true" ]; then
+        echo "Skipping cosign verify. Set COSIGN_ENABLE=true to enforce verify."
+        exit 0
+      fi
+    - cosign verify "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+
+conftest_policy_check:
+  stage: policy
+  image: alpine:3.20
+  script:
+    - apk add --no-cache curl tar >/dev/null
+    - curl -sSL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar -xz
+    - mv linux-amd64/helm /usr/local/bin/helm
+    - curl -sSL https://github.com/open-policy-agent/conftest/releases/download/v0.57.0/conftest_0.57.0_Linux_x86_64.tar.gz | tar -xz
+    - mv conftest /usr/local/bin/conftest
+    - helm template secure-app helm/secure-app -f helm/secure-app/values.yaml -f helm/secure-app/values-staging.yaml > rendered.yaml
+    - conftest test rendered.yaml -p security/conftest
+
+custom_api_exposure_check:
+  stage: policy
+  image: python:3.11
+  script:
+    - python security/api_exposure_check.py
+
+deploy_staging_helm:
+  stage: deploy_staging
+  image:
+    name: alpine/helm:3.16.4
+    entrypoint: [""]
+  script:
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - helm upgrade --install "$HELM_RELEASE_NAME" helm/secure-app --namespace "$STAGING_NAMESPACE" --create-namespace -f helm/secure-app/values.yaml -f helm/secure-app/values-staging.yaml --set image.repository="$CI_REGISTRY_IMAGE" --set image.tag="$IMAGE_TAG" --kube-context "$KUBE_CONTEXT" --kube-tls-server-name "localhost"
+  rules:
+    - if: '$CI_COMMIT_BRANCH && $KUBECONFIG_B64'
+    - when: never
+
+deploy_prod_helm_manual:
+  stage: deploy_prod
+  image:
+    name: alpine/helm:3.16.4
+    entrypoint: [""]
+  when: manual
+  allow_failure: false
+  script:
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+    - chmod 600 ~/.kube/config
+    - helm upgrade --install "$HELM_RELEASE_NAME" helm/secure-app --namespace "$PROD_NAMESPACE" --create-namespace -f helm/secure-app/values.yaml -f helm/secure-app/values-prod.yaml --set image.repository="$CI_REGISTRY_IMAGE" --set image.tag="$IMAGE_TAG" --kube-context "$KUBE_CONTEXT" --kube-tls-server-name "localhost"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $KUBECONFIG_B64'
+    - when: never

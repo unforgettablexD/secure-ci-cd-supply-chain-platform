@@ -1,0 +1,14 @@
+scan:
+  scanners:
+    - vuln
+    - secret
+  skip-dirs:
+    - .git
+pkg:
+  types:
+    - os
+    - library
+vulnerability:
+  severity:
+    - CRITICAL
+  ignore-unfixed: true

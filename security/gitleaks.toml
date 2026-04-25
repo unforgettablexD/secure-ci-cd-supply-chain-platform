@@ -1,0 +1,14 @@
+title = "Secure CI/CD Supply Chain Gitleaks Config"
+
+[allowlist]
+description = "Allow only documented demo placeholders and vulnerable-demo content"
+paths = [
+  '''vulnerable-demo/.*''',
+  '''helm/secure-app/templates/secret\.yaml''',
+  '''\.env\.example'''
+]
+regexes = [
+  '''demo-valid-signature''',
+  '''FAKE_DEMO_TOKEN''',
+  '''REPLACE_WITH'''
+]

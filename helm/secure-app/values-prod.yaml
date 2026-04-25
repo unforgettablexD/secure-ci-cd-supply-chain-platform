@@ -1,0 +1,11 @@
+replicaCount: 3
+ingress:
+  enabled: true
+  host: secure-app.prod.local
+resources:
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
