@@ -4,8 +4,8 @@ prereqs:
 	powershell -ExecutionPolicy Bypass -File scripts/check-prereqs.ps1
 
 install:
-	python -m pip install -r app/backend/requirements.txt
 	cd app/frontend && npm ci
+	docker build -t secure-supply-chain-backend:local app/backend
 
 test:
 	powershell -ExecutionPolicy Bypass -File scripts/test-all.ps1
